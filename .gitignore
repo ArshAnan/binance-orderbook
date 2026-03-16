@@ -5,6 +5,10 @@ build/
 dist/
 wheels/
 *.egg-info
+*.pyc
+.DS_Store
+*.parquet
+data/
 
 # Virtual environments
-.venv
+.venv/

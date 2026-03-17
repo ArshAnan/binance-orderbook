@@ -7,8 +7,8 @@ class OrderBookConfig:
     symbol: str = "BTCUSDT"
 
     # Binance URLs
-    ws_base_url: str = "wss://stream.binance.com:9443/ws"
-    rest_base_url: str = "https://api.binance.com"
+    ws_base_url: str = "wss://stream.binance.us:9443/ws"
+    rest_base_url: str = "https://api.binance.us"
 
     #Stream Settings
     depth_update_speed: str = "100ms"

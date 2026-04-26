@@ -19,7 +19,7 @@ class SyncState(Enum):
 class DepthEventBuffer:
     def __init__(self, config: OrderBookConfig):
         self.config = config
-        self._queue: deque[DepthEvent] = deque()  # fix 1: = not ==
+        self._queue: deque[DepthEvent] = deque()
         self._state = SyncState.BUFFERING
         self._last_update_id: int | None = None
 
@@ -29,7 +29,7 @@ class DepthEventBuffer:
     def _drop_stale_events(self, snapshot: OrderBookSnapshot) -> None:
         while self._queue:
             event = self._queue[0]
-            if event.final_update_id <= snapshot.last_update_id:
+            if event.final_update_id < snapshot.last_update_id:
                 self._queue.popleft()
                 logger.debug(f"Dropped stale event u={event.final_update_id}")
             else:
@@ -37,20 +37,23 @@ class DepthEventBuffer:
 
     def _find_first_valid_event(self, snapshot: OrderBookSnapshot) -> bool:
         if not self._queue:
+            logger.warning("Queue is empty after dropping stale events")
             return False
 
         first = self._queue[0]
+        logger.info(
+            f"Alignment check — snapshot={snapshot.last_update_id}, "
+            f"first_update_id={first.first_update_id}, "
+            f"final_update_id={first.final_update_id}"
+        )
         valid = (
-            first.first_update_id <= snapshot.last_update_id + 1  # fix 2: condition was backwards
+            first.first_update_id <= snapshot.last_update_id
             <= first.final_update_id
         )
 
         if valid:
             self._last_update_id = snapshot.last_update_id
-            logger.info(
-                f"Sync established - snapshot last_update_id={snapshot.last_update_id}, "
-                f"first valid event U={first.first_update_id} u={first.final_update_id}"
-            )
+            logger.info(f"Sync established - snapshot last_update_id={snapshot.last_update_id}")
         else:
             logger.warning(
                 f"Could not find valid first event - "
@@ -60,7 +63,7 @@ class DepthEventBuffer:
         return valid
 
     def _validate_sequence(self, event: DepthEvent) -> bool:
-        if self._last_update_id is None:  # fix 3: guard against None
+        if self._last_update_id is None:
             return False
 
         expected = self._last_update_id + 1
@@ -81,15 +84,26 @@ class DepthEventBuffer:
             logger.info("Starting sync sequence...")
 
             async for raw_event in stream_depth_events(self.config):
-
                 if self._state == SyncState.BUFFERING:
                     self._buffer_event(raw_event)
 
-                    if len(self._queue) >= 10:
-                        logger.info("Buffer has 10 events, fetching snapshot...")
+                    if len(self._queue) >= 50:  # increased from 10 to 50
+                        logger.info("Buffer has 50 events, fetching snapshot...")
                         snapshot = await fetch_snapshot(self.config)
 
+                        # keep collecting events while we process the snapshot
+                        logger.info(
+                            f"Snapshot last_update_id={snapshot.last_update_id}, "
+                            f"buffer has {len(self._queue)} events, "
+                            f"first={self._queue[0].first_update_id}, "
+                            f"last={self._queue[-1].final_update_id}"
+                        )
+
                         self._drop_stale_events(snapshot)
+
+                        logger.info(
+                            f"After drop: {len(self._queue)} events remain in buffer"
+                        )
 
                         if not self._find_first_valid_event(snapshot):
                             logger.warning("Sync failed, restarting...")

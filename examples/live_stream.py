@@ -1,9 +1,12 @@
 import asyncio
 import logging
 
+import numpy as np
+
 from orderbook.book import OrderBook
 from orderbook.buffer import DepthEventBuffer
 from orderbook.config import OrderBookConfig
+from orderbook.features import extract_features
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,15 +23,11 @@ async def main():
 
     logger.info(f"Starting order book for {config.symbol}")
 
-    # we need the first snapshot to initialize the book
-    # the buffer will fetch it internally during sync
-    # so we initialize the book once we receive the first event
     initialized = False
     event_count = 0
 
     async for event in buffer.stream_validated_events():
         if not initialized:
-            # import here to avoid circular imports
             from orderbook.client import fetch_snapshot
             snapshot = await fetch_snapshot(config)
             book.initialize(snapshot)
@@ -38,9 +37,9 @@ async def main():
         book.apply_event(event)
         event_count += 1
 
-        # print the book every 10 events
         if event_count % 10 == 0:
             state = book.top_levels(5)
+            features = extract_features(state, config)
 
             print(f"\n--- Order Book ({config.symbol}) | update #{event_count} ---")
             print(f"Mid price : ${state.mid_price:,.2f}")
@@ -56,6 +55,15 @@ async def main():
                     f"{bid.price:>12,.2f} {bid.quantity:>12.6f}  "
                     f"{ask.price:>12,.2f} {ask.quantity:>12.6f}"
                 )
+
+            state = book.top_levels()
+            features = extract_features(state, config)
+
+            print()
+            print(f"Imbalance     : {features[6 + 4*config.num_levels]:.4f}")
+            print(f"Weighted mid  : ${features[7 + 4*config.num_levels]:,.2f}")
+            print(f"Spread bps    : {features[8 + 4*config.num_levels]:.2f}")
+            print(f"Feature vector: shape={features.shape} dtype={features.dtype}")
 
             if not book.is_valid():
                 logger.error("Book is in invalid state!")

@@ -12,3 +12,6 @@ data/
 
 # Virtual environments
 .venv/
+
+# UV stuff
+.uv/

@@ -1,5 +1,4 @@
 import logging
-import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -11,7 +10,6 @@ import pyarrow.parquet as pq
 
 from orderbook.book import OrderBookState
 from orderbook.config import OrderBookConfig
-from orderbook.features import extract_features
 
 logger = logging.getLogger(__name__)
 
@@ -54,13 +52,12 @@ class OrderBookRecorder:
         self._last_write_time = time.time()
         self._file_count = 0
 
-        # create storage directory if it doesn't exist
         Path(config.storage_dir).mkdir(parents=True, exist_ok=True)
         logger.info(f"Recorder initialized — writing to {config.storage_dir}/")
 
-    def record(self, state: OrderBookState) -> None:
-        features = extract_features(state, self.config)
+    def record(self, state: OrderBookState, features: np.ndarray) -> None:
         n = self.config.num_levels
+        derived_start = 6 + 4 * n
 
         row = {
             "timestamp_ms": int(time.time() * 1000),
@@ -75,7 +72,6 @@ class OrderBookRecorder:
             row[f"ask_price_{i}"] = state.asks[i].price if i < len(state.asks) else 0.0
             row[f"ask_qty_{i}"] = state.asks[i].quantity if i < len(state.asks) else 0.0
 
-        derived_start = 6 + 4 * n
         row["imbalance"] = float(features[derived_start])
         row["weighted_mid"] = float(features[derived_start + 1])
         row["spread_bps"] = float(features[derived_start + 2])
@@ -87,7 +83,8 @@ class OrderBookRecorder:
         self._rows.append(row)
 
         now = time.time()
-        if (now - self._last_write_time >= self.config.snapshot_interval_seconds or len(self._rows) >= self.config.max_rows_per_file) :
+        if (now - self._last_write_time >= self.config.snapshot_interval_seconds
+                or len(self._rows) >= self.config.max_rows_per_file):
             self._flush()
             self._last_write_time = now
 

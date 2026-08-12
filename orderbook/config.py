@@ -27,6 +27,9 @@ class OrderBookConfig:
     snapshot_interval_seconds: float = 3600.00
     max_rows_per_file: int = 50000
 
+    # Feature Settings
+    num_price_returns: int = 10
+
     # Derived Properties
     @property
     def ws_stream_url(self) -> str:

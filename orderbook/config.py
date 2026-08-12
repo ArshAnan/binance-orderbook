@@ -24,7 +24,8 @@ class OrderBookConfig:
 
     # Storage Settings
     storage_dir: str = "data"
-    snapshot_interval_seconds: float = 1.0
+    snapshot_interval_seconds: float = 3600.00
+    max_rows_per_file: int = 50000
 
     # Derived Properties
     @property

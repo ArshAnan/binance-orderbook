@@ -87,7 +87,7 @@ class OrderBookRecorder:
         self._rows.append(row)
 
         now = time.time()
-        if now - self._last_write_time >= self.config.snapshot_interval_seconds:
+        if (now - self._last_write_time >= self.config.snapshot_interval_seconds or len(self._rows) >= self.config.max_rows_per_file) :
             self._flush()
             self._last_write_time = now
 
